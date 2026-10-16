@@ -1,10 +1,17 @@
-
 name: fcg-demo
 
+x-rabbit-config: &rabbit-config
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  RabbitMq__VirtualHost: /
+  RabbitMq__Username: ${RABBITMQ_USER}
+  RabbitMq__Password: ${RABBITMQ_PASSWORD}
+
 x-users-config: &users-config
+  <<: *rabbit-config
   DOTNET_ENVIRONMENT: Development
   ASPNETCORE_ENVIRONMENT: Development
-  ConnectionStrings__UsersDatabase: "Host=postgres;Port=5432;Database=fcg_users_demo;Username=fcg_users_demo;Password=UsersDb_Demo_2026!;Include Error Detail=false"
+  ConnectionStrings__UsersDatabase: "Host=postgres;Port=5432;Database=${USERS_DB_NAME};Username=${USERS_DB_USER};Password=${USERS_DB_PASSWORD};Include Error Detail=false"
   Jwt__Issuer: FIAP.CloudGames
   Jwt__Audience: FIAP.CloudGames.Api
   Jwt__AccessTokenExpirationMinutes: "15"
@@ -13,24 +20,31 @@ x-users-config: &users-config
   Jwt__Signing__PrivateKeyPath: /data/jwt/private.pem
   Jwt__Validation__Keys__0__KeyId: users-demo-v1
   Jwt__Validation__Keys__0__PublicKeyPath: /data/jwt/public.pem
-  RabbitMq__Host: rabbitmq
-  RabbitMq__Port: "5672"
-  RabbitMq__VirtualHost: /
-  RabbitMq__Username: fcg_demo
-  RabbitMq__Password: "Rabbit_Demo_2026!"
   RabbitMq__UseTls: "false"
 
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: fcg_users_demo
-      POSTGRES_USER: fcg_users_demo
-      POSTGRES_PASSWORD: "UsersDb_Demo_2026!"
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      # Repassadas ao script init-db/01-create-databases.sh
+      USERS_DB_NAME: ${USERS_DB_NAME}
+      USERS_DB_USER: ${USERS_DB_USER}
+      USERS_DB_PASSWORD: ${USERS_DB_PASSWORD}
+      CATALOG_DB_NAME: ${CATALOG_DB_NAME}
+      CATALOG_DB_USER: ${CATALOG_DB_USER}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+      PAYMENTS_DB_NAME: ${PAYMENTS_DB_NAME}
+      PAYMENTS_DB_USER: ${PAYMENTS_DB_USER}
+      PAYMENTS_DB_PASSWORD: ${PAYMENTS_DB_PASSWORD}
+      NOTIFICATIONS_DB_NAME: ${NOTIFICATIONS_DB_NAME}
+      NOTIFICATIONS_DB_USER: ${NOTIFICATIONS_DB_USER}
+      NOTIFICATIONS_DB_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD}
     volumes:
       - postgres-dados:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fcg_users_demo -d fcg_users_demo"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -43,8 +57,8 @@ services:
     image: rabbitmq@sha256:8dd6e3570ddaa2ef82a6c3a8950e79c1f73893adfbdddbc374fc1f1ac8a0f5dd
     hostname: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: fcg_demo
-      RABBITMQ_DEFAULT_PASS: "Rabbit_Demo_2026!"
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "127.0.0.1:${FCG_RABBIT_MANAGEMENT_PORT:-15672}:15672"
     volumes:
@@ -89,8 +103,11 @@ services:
     image: fgcprojetofiap/catalog-api:1.0
     restart: unless-stopped
     environment:
+      <<: *rabbit-config
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__CatalogDatabase: "Host=postgres;Port=5432;Database=${CATALOG_DB_NAME};Username=${CATALOG_DB_USER};Password=${CATALOG_DB_PASSWORD}"
+      # TODO: configurar Jwt__PublicKeys (chave pública gerada pela UsersAPI no volume jwt-chaves)
     ports:
       - "127.0.0.1:${FCG_CATALOG_HTTP_PORT:-5081}:8080"
     depends_on:
@@ -110,8 +127,12 @@ services:
     image: fgcprojetofiap/payments-api:1.0
     restart: unless-stopped
     environment:
+      <<: *rabbit-config
+      RabbitMq__Host: "rabbitmq://rabbitmq"
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
+      # Chave igual à do appsettings da PaymentsAPI; se o código ler "PaymentsDatabase", renomeie aqui
+      ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${PAYMENTS_DB_NAME};Username=${PAYMENTS_DB_USER};Password=${PAYMENTS_DB_PASSWORD}"
     ports:
       - "127.0.0.1:${FCG_PAYMENTS_HTTP_PORT:-5082}:8080"
     depends_on:
@@ -131,12 +152,10 @@ services:
     image: fgcprojetofiap/notifications-api:1.0.2
     restart: unless-stopped
     environment:
+      <<: *rabbit-config
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
-      RabbitMq__Host: rabbitmq
-      RabbitMq__VirtualHost: /
-      RabbitMq__Username: fcg_demo
-      RabbitMq__Password: "Rabbit_Demo_2026!"
+      ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${NOTIFICATIONS_DB_NAME};Username=${NOTIFICATIONS_DB_USER};Password=${NOTIFICATIONS_DB_PASSWORD}"
     ports:
       - "127.0.0.1:${FCG_API4_HTTP_PORT:-5083}:8080"
     depends_on:

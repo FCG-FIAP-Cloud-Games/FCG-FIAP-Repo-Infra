@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: fcg-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: fcg-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: POSTGRES_ADMIN_PASSWORD
+        - name: USERS_DB_NAME
+          value: "users_db"
+        - name: USERS_DB_USER
+          value: "users_user"
+        - name: USERS_DB_PASSWORD
+          value: "supersenha"
+        - name: CATALOG_DB_NAME
+          value: "catalog_db"
+        - name: CATALOG_DB_USER
+          value: "catalog_user"
+        - name: CATALOG_DB_PASSWORD
+          value: "supersenha"
+        - name: PAYMENTS_DB_NAME
+          value: "payments_db"
+        - name: PAYMENTS_DB_USER
+          value: "payments_user"
+        - name: PAYMENTS_DB_PASSWORD
+          value: "supersenha"
+        - name: NOTIFICATIONS_DB_NAME
+          value: "notifications_db"
+        - name: NOTIFICATIONS_DB_USER
+          value: "notifications_user"
+        - name: NOTIFICATIONS_DB_PASSWORD
+          value: "supersenha"
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-db-volume
+          mountPath: /docker-entrypoint-initdb.d
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 15
+          periodSeconds: 10
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init-db-volume
+        configMap:
+          name: postgres-init-script
+          defaultMode: 0755 # Garante permissão de execução para o script .sh
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: fcg-demo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  selector:
+    app: postgres

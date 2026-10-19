@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paymentsapi
+  namespace: fcg-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: paymentsapi
+  template:
+    metadata:
+      labels:
+        app: paymentsapi
+    spec:
+      containers:
+      - name: paymentsapi
+        image: fgcprojetofiap/payments-api:1.0
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: RabbitMq__Host
+          value: "rabbitmq://rabbitmq"
+        envFrom:
+        - configMapRef:
+            name: fcg-config
+        - secretRef:
+            name: fcg-secrets
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paymentsapi
+  namespace: fcg-demo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: paymentsapi

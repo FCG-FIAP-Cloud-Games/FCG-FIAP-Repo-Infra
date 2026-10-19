@@ -1,6 +1,41 @@
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: fcg-config
   namespace: fcg-demo
 data:
+  DOTNET_ENVIRONMENT: "Development"
+  ASPNETCORE_ENVIRONMENT: "Development"
+  ASPNETCORE_HTTP_PORTS: "8080"
+
+  USERS_DB_NAME: "users_db"
+  USERS_DB_USER: "users_user"
+
+  CATALOG_DB_NAME: "catalog_db"
+  CATALOG_DB_USER: "catalog_user"
+
+  PAYMENTS_DB_NAME: "payments_db"
+  PAYMENTS_DB_USER: "payments_user"
+
+  NOTIFICATIONS_DB_NAME: "notifications_db"
+  NOTIFICATIONS_DB_USER: "notifications_user"
+
+
+  RabbitMq__Host: "rabbitmq"
+  RabbitMq__Port: "5672"
+  RabbitMq__VirtualHost: "/"
+  RabbitMq__UseTls: "false"
+
+  Jwt__Issuer: "FIAP.CloudGames"
+  Jwt__Audience: "FIAP.CloudGames.Api"
+  Jwt__AccessTokenExpirationMinutes: "15"
+  Jwt__RefreshTokenExpirationDays: "7"
+  Jwt__Signing__ActiveKeyId: "users-demo-v1"
+  Jwt__Signing__PrivateKeyPath: "/data/jwt/private.pem"
+  Jwt__Validation__Keys__0__KeyId: "users-demo-v1"
+  Jwt__Validation__Keys__0__PublicKeyPath: "/data/jwt/public.pem"
+
+  DemonstracaoLocal__Habilitada: "true"
+  Swagger__Enabled: "true"
+  Outbox__Enabled: "true"

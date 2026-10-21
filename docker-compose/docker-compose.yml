@@ -44,7 +44,7 @@ services:
       - postgres-dados:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -74,17 +74,19 @@ services:
       - fcg-interna
 
   usersapi:
-    image: fgcprojetofiap/users-api:1.3
+    image: ${USERS_IMAGE}
     environment:
       <<: *users-config
       DemonstracaoLocal__Habilitada: "true"
       ASPNETCORE_HTTP_PORTS: "8080"
       Swagger__Enabled: "true"
       Outbox__Enabled: "true"
+      Jwt__PublicKeyExport__Path: /data/jwt-publica/public.pem
     ports:
       - "127.0.0.1:${FCG_USERS_HTTP_PORT:-5088}:8080"
     volumes:
       - jwt-chaves:/data/jwt
+      - jwt-publica:/data/jwt-publica
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,20 +102,33 @@ services:
         max-file: "3"
 
   catalogapi:
-    image: fgcprojetofiap/catalog-api:1.0
+    image: ${CATALOG_IMAGE}
     restart: unless-stopped
     environment:
       <<: *rabbit-config
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__CatalogDatabase: "Host=postgres;Port=5432;Database=${CATALOG_DB_NAME};Username=${CATALOG_DB_USER};Password=${CATALOG_DB_PASSWORD}"
-      # TODO: configurar Jwt__PublicKeys (chave pública gerada pela UsersAPI no volume jwt-chaves)
+      DemonstracaoLocal__Habilitada: "true"
+      Jwt__Issuer: FIAP.CloudGames
+      Jwt__Audience: FIAP.CloudGames.Api
+      Jwt__PublicKeys__0__Kid: users-demo-v1
+      Jwt__PublicKeys__0__PublicKeyPath: /data/jwt-publica/public.pem
+    volumes:
+      - type: volume
+        source: jwt-publica
+        target: /data/jwt-publica
+        read_only: true
+        volume:
+          nocopy: true
     ports:
       - "127.0.0.1:${FCG_CATALOG_HTTP_PORT:-5081}:8080"
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      usersapi:
         condition: service_healthy
     networks:
       - fcg-interna
@@ -124,15 +139,15 @@ services:
         max-file: "3"
 
   paymentsapi:
-    image: fgcprojetofiap/payments-api:1.0
+    image: ${PAYMENTS_IMAGE}
     restart: unless-stopped
     environment:
       <<: *rabbit-config
       RabbitMq__Host: "rabbitmq://rabbitmq"
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
-      # Chave igual à do appsettings da PaymentsAPI; se o código ler "PaymentsDatabase", renomeie aqui
-      ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${PAYMENTS_DB_NAME};Username=${PAYMENTS_DB_USER};Password=${PAYMENTS_DB_PASSWORD}"
+      DemonstracaoLocal__Habilitada: "true"
+      ConnectionStrings__PaymentsDatabase: "Host=postgres;Port=5432;Database=${PAYMENTS_DB_NAME};Username=${PAYMENTS_DB_USER};Password=${PAYMENTS_DB_PASSWORD}"
     ports:
       - "127.0.0.1:${FCG_PAYMENTS_HTTP_PORT:-5082}:8080"
     depends_on:
@@ -149,7 +164,7 @@ services:
         max-file: "3"
 
   notificationsapi:
-    image: fgcprojetofiap/notifications-api:1.0.2
+    image: ${NOTIFICATIONS_IMAGE}
     restart: unless-stopped
     environment:
       <<: *rabbit-config
@@ -179,3 +194,4 @@ volumes:
   postgres-dados:
   rabbitmq-dados:
   jwt-chaves:
+  jwt-publica:

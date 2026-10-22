@@ -164,13 +164,20 @@ services:
         max-file: "3"
 
   notificationsapi:
-    image: ${NOTIFICATIONS_IMAGE}
+    image: ${NOTIFICATIONS_IMAGE:-fgcprojetofiap/notifications-api:1.0.2}
     restart: unless-stopped
     environment:
       <<: *rabbit-config
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${NOTIFICATIONS_DB_NAME};Username=${NOTIFICATIONS_DB_USER};Password=${NOTIFICATIONS_DB_PASSWORD}"
+      ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${NOTIFICATIONS_DB_NAME};Username=${NOTIFICATIONS_DB_USER};Password=${NOTIFICATIONS_DB_PASSWORD};Include Error Detail=false"
+      Smtp__Host: ${SMTP_HOST:-smtp.gmail.com}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__User: ${SMTP_USER:?Defina SMTP_USER no .env do Docker Compose}
+      Smtp__Password: ${SMTP_PASSWORD:?Defina SMTP_PASSWORD no .env do Docker Compose}
+      Smtp__From: ${SMTP_FROM:?Defina SMTP_FROM no .env do Docker Compose}
+      Smtp__SecureSocketOptions: ${SMTP_SECURE_SOCKET_OPTIONS:-StartTls}
+      Notifications__DevelopmentTestRecipient: ${NOTIFICATIONS_TEST_RECIPIENT:-}
     ports:
       - "127.0.0.1:${FCG_API4_HTTP_PORT:-5083}:8080"
     depends_on:

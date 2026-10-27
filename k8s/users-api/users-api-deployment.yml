@@ -1,0 +1,166 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: users-jwt-pvc
+  namespace: fcg-demo
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usersapi
+  namespace: fcg-demo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: usersapi
+  template:
+    metadata:
+      labels:
+        app: usersapi
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: usersapi
+          image: fgcprojetofiap/users-api:1.4
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: fcg-config
+
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
+
+            - name: DemonstracaoLocal__Habilitada
+              value: "true"
+
+            - name: RabbitMq__Host
+              value: "rabbitmq"
+
+            - name: RabbitMq__Port
+              value: "5672"
+
+            - name: RabbitMq__VirtualHost
+              value: "/"
+
+            - name: RabbitMq__UseTls
+              value: "false"
+
+            - name: RabbitMq__Username
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_USER
+
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_PASSWORD
+
+            - name: USERS_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: fcg-config
+                  key: USERS_DB_NAME
+
+            - name: USERS_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: fcg-config
+                  key: USERS_DB_USER
+
+            - name: USERS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: USERS_DB_PASSWORD
+
+            - name: ConnectionStrings__UsersDatabase
+              value: "Host=postgres;Port=5432;Database=$(USERS_DB_NAME);Username=$(USERS_DB_USER);Password=$(USERS_DB_PASSWORD);Include Error Detail=false"
+
+            - name: Jwt__PublicKeyExport__Path
+              value: "/data/jwt-publica/public.pem"
+
+          volumeMounts:
+            - name: users-jwt-storage
+              mountPath: /data
+
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          terminationMessagePolicy: File
+
+      volumes:
+        - name: users-jwt-storage
+          persistentVolumeClaim:
+            claimName: users-jwt-pvc
+
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usersapi
+  namespace: fcg-demo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: usersapi

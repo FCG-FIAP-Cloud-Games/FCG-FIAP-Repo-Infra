@@ -3,6 +3,11 @@ kind: Deployment
 metadata:
   name: paymentsapi
   namespace: fcg-demo
+<<<<<<< Updated upstream
+=======
+  labels:
+    app: paymentsapi
+>>>>>>> Stashed changes
 spec:
   replicas: 1
   selector:
@@ -14,38 +19,114 @@ spec:
         app: paymentsapi
     spec:
       containers:
-      - name: paymentsapi
-        image: fgcprojetofiap/payments-api:1.0
-        ports:
-        - containerPort: 8080
-          name: http
-        env:
-        - name: RabbitMq__Host
-          value: "rabbitmq://rabbitmq"
-        envFrom:
-        - configMapRef:
-            name: fcg-config
-        - secretRef:
-            name: fcg-secrets
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 15
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 20
-          periodSeconds: 10
+        - name: paymentsapi
+          image: fgcprojetofiap/payments-api:1.2
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: fcg-config
+
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
+
+            - name: DemonstracaoLocal__Habilitada
+              value: "true"
+
+            - name: RabbitMq__Host
+              value: "rabbitmq://rabbitmq"
+
+            - name: RabbitMq__Port
+              value: "5672"
+
+            - name: RabbitMq__VirtualHost
+              value: "/"
+
+            - name: RabbitMq__UseTls
+              value: "false"
+
+            - name: RabbitMq__Username
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_USER
+
+            - name: RabbitMq__Password
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_PASSWORD
+
+            - name: PAYMENTS_DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: fcg-config
+                  key: PAYMENTS_DB_NAME
+
+            - name: PAYMENTS_DB_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: fcg-config
+                  key: PAYMENTS_DB_USER
+
+            - name: PAYMENTS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: PAYMENTS_DB_PASSWORD
+
+            - name: ConnectionStrings__PaymentsDatabase
+              value: "Host=postgres;Port=5432;Database=$(PAYMENTS_DB_NAME);Username=$(PAYMENTS_DB_USER);Password=$(PAYMENTS_DB_PASSWORD);Include Error Detail=false"
+
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 30
+
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          terminationMessagePolicy: File
+
       restartPolicy: Always
+
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: paymentsapi
   namespace: fcg-demo
+<<<<<<< Updated upstream
 spec:
   type: ClusterIP
   ports:
@@ -54,3 +135,16 @@ spec:
     name: http
   selector:
     app: paymentsapi
+=======
+  labels:
+    app: paymentsapi
+spec:
+  type: ClusterIP
+  selector:
+    app: paymentsapi
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+>>>>>>> Stashed changes

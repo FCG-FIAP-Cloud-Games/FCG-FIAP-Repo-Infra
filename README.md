@@ -11,7 +11,7 @@ As imagens estão publicadas no Docker Hub. As versões usadas pelo Compose fica
 | Users | `fgcprojetofiap/users-api:1.4` |
 | Catalog | `fgcprojetofiap/catalog-api:1.0.2` |
 | Payments | `fgcprojetofiap/payments-api:1.2` |
-| Notifications | `fgcprojetofiap/notifications-api:1.0.3` |
+| Notifications | `fgcprojetofiap/notifications-api:1.0.2` |
 
 ## Executar
 
@@ -81,3 +81,17 @@ docker compose exec -T postgres bash /docker-entrypoint-initdb.d/01-create-datab
 ```
 
 Esse comando não faz parte da primeira execução nem dos reinícios normais. Alterações de tabelas pertencem às migrations de cada API.
+
+## Executar no Kubernetes
+
+Com o cluster local do Docker Desktop ativo e selecionado, execute na raiz deste repositório:
+
+```powershell
+kubectl apply -k ./k8s
+kubectl -n fcg-demo rollout status deployment/usersapi --timeout=300s
+kubectl -n fcg-demo port-forward service/usersapi 5089:8080
+```
+
+Acesse o Users em http://localhost:5089/swagger, mantendo o terminal do port-forward aberto. O conjunto atual inclui Users, Payments, PostgreSQL, RabbitMQ, ConfigMaps, Secret e volumes. Catalog e Notifications ainda não estão incluídos nesse conjunto Kubernetes do branch.
+
+O [guia do Users no Kubernetes](k8s/users-api/README.md) explica os pré-requisitos, a inicialização automática e os testes. O [kustomization.yaml](k8s/kustomization.yaml) apenas reúne os manifestos já organizados por serviço e usa o Kustomize integrado ao kubectl. O deploy real precisa ser validado no cluster; a criação de todos os Pods não significa que todos já estejam prontos.

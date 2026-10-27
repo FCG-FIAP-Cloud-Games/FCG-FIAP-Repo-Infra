@@ -9,7 +9,7 @@ data:
   ASPNETCORE_ENVIRONMENT: "Development"
   ASPNETCORE_HTTP_PORTS: "8080"
 
-  USERS_DB_NAME: "users_db"
+  USERS_DB_NAME: "fcg_users_demo"
   USERS_DB_USER: "users_user"
 
   CATALOG_DB_NAME: "catalog_db"

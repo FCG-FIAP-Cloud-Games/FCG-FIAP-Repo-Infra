@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace/namespace.yml
+  - key-vault/configmap.yml
+  - key-vault/secrets.yml
+  - key-vault/postgres-init-script.yml
+  - postgres/postgres-deployment.yml
+  - rabbitmq/rabbitmq-deployment.yml
+  - payments-api/payments-api-deployment.yml
+  - users-api/users-api-deployment.yml

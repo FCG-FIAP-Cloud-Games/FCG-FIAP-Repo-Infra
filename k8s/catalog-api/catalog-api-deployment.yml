@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogapi
+  namespace: fcg-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalogapi
+  template:
+    metadata:
+      labels:
+        app: catalogapi
+    spec:
+      containers:
+      - name: catalogapi
+        image: fgcprojetofiap/catalog-api:1.0.2
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: ConnectionStrings__CatalogDatabase
+          value: "Host=postgres;Port=5432;Database=$(CATALOG_DB_NAME);Username=$(CATALOG_DB_USER);Password=$(CATALOG_DB_PASSWORD)"
+        - name: RabbitMq__Username
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_USER
+        - name: RabbitMq__Password
+          valueFrom:
+            secretKeyRef:
+              name: fcg-secrets
+              key: RABBITMQ_PASSWORD
+        envFrom:
+        - configMapRef:
+            name: fcg-config
+        - secretRef:
+            name: fcg-secrets
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogapi
+  namespace: fcg-demo
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  selector:
+    app: catalogapi

@@ -20,6 +20,10 @@ spec:
         - containerPort: 8080
           name: http
         env:
+        - name: Jwt__PublicKeys__0__Kid
+          value: "users-demo-v1"
+        - name: Jwt__PublicKeys__0__PublicKeyPath
+          value: "/data/jwt-publica/public.pem"
         - name: ConnectionStrings__CatalogDatabase
           value: "Host=postgres;Port=5432;Database=$(CATALOG_DB_NAME);Username=$(CATALOG_DB_USER);Password=$(CATALOG_DB_PASSWORD)"
         - name: RabbitMq__Username
@@ -37,6 +41,10 @@ spec:
             name: fcg-config
         - secretRef:
             name: fcg-secrets
+        volumeMounts:
+        - name: jwt-public-key
+          mountPath: /data/jwt-publica
+          readOnly: true
         readinessProbe:
           httpGet:
             path: /health
@@ -50,6 +58,13 @@ spec:
           initialDelaySeconds: 20
           periodSeconds: 10
       restartPolicy: Always
+      volumes:
+      - name: jwt-public-key
+        configMap:
+          name: catalog-jwt-public-key
+          items:
+          - key: public.pem
+            path: public.pem
 ---
 apiVersion: v1
 kind: Service

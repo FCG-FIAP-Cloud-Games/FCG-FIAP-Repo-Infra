@@ -30,35 +30,76 @@ spec:
       - name: postgres
         image: postgres:16-alpine
         env:
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: fcg-secrets
-              key: POSTGRES_ADMIN_PASSWORD
-        - name: USERS_DB_NAME
-          value: "users_db"
-        - name: USERS_DB_USER
-          value: "users_user"
-        - name: USERS_DB_PASSWORD
-          value: "supersenha"
-        - name: CATALOG_DB_NAME
-          value: "catalog_db"
-        - name: CATALOG_DB_USER
-          value: "catalog_user"
-        - name: CATALOG_DB_PASSWORD
-          value: "supersenha"
-        - name: PAYMENTS_DB_NAME
-          value: "payments_db"
-        - name: PAYMENTS_DB_USER
-          value: "payments_user"
-        - name: PAYMENTS_DB_PASSWORD
-          value: "supersenha"
-        - name: NOTIFICATIONS_DB_NAME
-          value: "notifications_db"
-        - name: NOTIFICATIONS_DB_USER
-          value: "notifications_user"
-        - name: NOTIFICATIONS_DB_PASSWORD
-          value: "supersenha"
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: fcg-secrets
+                key: POSTGRES_ADMIN_PASSWORD
+
+          - name: USERS_DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: USERS_DB_NAME
+          - name: USERS_DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: USERS_DB_USER
+          - name: USERS_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: fcg-secrets
+                key: USERS_DB_PASSWORD
+
+          - name: CATALOG_DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: CATALOG_DB_NAME
+          - name: CATALOG_DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: CATALOG_DB_USER
+          - name: CATALOG_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: fcg-secrets
+                key: CATALOG_DB_PASSWORD
+
+          - name: PAYMENTS_DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: PAYMENTS_DB_NAME
+          - name: PAYMENTS_DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: PAYMENTS_DB_USER
+          - name: PAYMENTS_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: fcg-secrets
+                key: PAYMENTS_DB_PASSWORD
+
+          - name: NOTIFICATIONS_DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: NOTIFICATIONS_DB_NAME
+          - name: NOTIFICATIONS_DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: fcg-config
+                key: NOTIFICATIONS_DB_USER
+          - name: NOTIFICATIONS_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: fcg-secrets
+                key: NOTIFICATIONS_DB_PASSWORD
+
         ports:
         - containerPort: 5432
           name: postgres

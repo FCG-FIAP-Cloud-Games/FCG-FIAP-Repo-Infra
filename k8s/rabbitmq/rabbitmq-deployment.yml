@@ -16,17 +16,28 @@ spec:
       containers:
       - name: rabbitmq
         image: rabbitmq:3-management-alpine
-        env:
-        - name: RABBITMQ_DEFAULT_USER
-          valueFrom:
-            secretKeyRef:
-              name: fcg-secrets
-              key: RABBITMQ_USER
-        - name: RABBITMQ_DEFAULT_PASS
-          valueFrom:
-            secretKeyRef:
-              name: fcg-secrets
-              key: RABBITMQ_PASSWORD
+    envFrom:
+      - configMapRef:
+          name: fcg-config
+    env:
+      - name: RabbitMq__Username
+        valueFrom:
+          secretKeyRef:
+            name: fcg-secrets
+            key: RABBITMQ_USER
+      - name: RabbitMq__Password
+        valueFrom:
+          secretKeyRef:
+            name: fcg-secrets
+            key: RABBITMQ_PASSWORD
+      - name: USERS_DB_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: fcg-secrets
+            key: USERS_DB_PASSWORD
+      - name: ConnectionStrings__UsersDatabase
+        value: "Host=postgres;Port=5432;Database=$(USERS_DB_NAME);Username=$(USERS_DB_USER);Password=$(USERS_DB_PASSWORD);Include Error Detail=false"
+
         ports:
         - containerPort: 5672
           name: amqp

@@ -3,11 +3,6 @@ kind: Deployment
 metadata:
   name: paymentsapi
   namespace: fcg-demo
-<<<<<<< Updated upstream
-=======
-  labels:
-    app: paymentsapi
->>>>>>> Stashed changes
 spec:
   replicas: 1
   selector:
@@ -126,7 +121,6 @@ kind: Service
 metadata:
   name: paymentsapi
   namespace: fcg-demo
-<<<<<<< Updated upstream
 spec:
   type: ClusterIP
   ports:
@@ -135,16 +129,3 @@ spec:
     name: http
   selector:
     app: paymentsapi
-=======
-  labels:
-    app: paymentsapi
-spec:
-  type: ClusterIP
-  selector:
-    app: paymentsapi
-  ports:
-    - name: http
-      port: 8080
-      targetPort: http
-      protocol: TCP
->>>>>>> Stashed changes

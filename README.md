@@ -8,10 +8,14 @@ As imagens estão publicadas no Docker Hub. As versões usadas pelo Compose fica
 
 | Serviço | Imagem |
 |---|---|
-| Users | `fgcprojetofiap/users-api:1.4` |
-| Catalog | `fgcprojetofiap/catalog-api:1.0.2` |
+| Users | `fgcprojetofiap/users-api:1.5` |
+| Catalog | `fgcprojetofiap/catalog-api:1.0.3` |
 | Payments | `fgcprojetofiap/payments-api:1.2` |
-| Notifications | `fgcprojetofiap/notifications-api:1.0.2` |
+| Notifications | `fgcprojetofiap/notifications-api:1.0.7` |
+
+Para a execução integrada no Kubernetes, siga a seção **Executar no Kubernetes** deste documento. O Secret SMTP e as chaves públicas são preparados pela configuração do conjunto.
+
+No Docker Compose, preencha também `SMTP_USER`, `SMTP_PASSWORD` e `SMTP_FROM` no `docker-compose/.env` com os valores acordados pelo grupo antes de executar os comandos abaixo. O Secret Kubernetes não é lido automaticamente pelo Docker Compose.
 
 ## Executar
 
@@ -92,6 +96,30 @@ kubectl -n fcg-demo rollout status deployment/usersapi --timeout=300s
 kubectl -n fcg-demo port-forward service/usersapi 5089:8080
 ```
 
-Acesse o Users em http://localhost:5089/swagger, mantendo o terminal do port-forward aberto. O conjunto atual inclui Users, Payments, PostgreSQL, RabbitMQ, ConfigMaps, Secret e volumes. Catalog e Notifications ainda não estão incluídos nesse conjunto Kubernetes do branch.
+Acesse o Users em http://localhost:5089/swagger, mantendo o terminal do port-forward aberto. O conjunto atual inclui Users, Payments, PostgreSQL, RabbitMQ, ConfigMaps, Secret e volumes. Catalog e Notifications também estão incluídos. O Catalog obtém automaticamente as chaves públicas no Users por JWKS. Notifications depende do Secret SMTP descrito abaixo.
 
 O [guia do Users no Kubernetes](k8s/users-api/README.md) explica os pré-requisitos, a inicialização automática e os testes. O [kustomization.yaml](k8s/kustomization.yaml) apenas reúne os manifestos já organizados por serviço e usa o Kustomize integrado ao kubectl. O deploy real precisa ser validado no cluster; a criação de todos os Pods não significa que todos já estejam prontos.
+
+## Correção JWKS e SMTP no Kubernetes
+
+O Kubernetes usa Users `1.5` e Catalog `1.0.3` nesta alteração. As imagens foram testadas e publicadas no Docker Hub em 27/10/2026 e podem ser baixadas em outras máquinas. O Compose também referencia essas versões e preserva o modo PEM anterior, que continua compatível.
+
+O [guia do Catalog](k8s/catalog-api/README.md) explica a obtenção automática de chaves e o cache. A chave privada continua exclusiva do Users. O ConfigMap `catalog-jwt-public-key` não é necessário nesse modo.
+
+### Credenciais Notifications
+
+Por definição do grupo, as credenciais SMTP ficam no manifesto [notifications-api-secrets.yml](k8s/key-vault/notifications-api-secrets.yml), já incluído no Kustomize. Host, porta, remetente e TLS ficam no ConfigMap do Notifications. O Deployment lê `Smtp__User` e `Smtp__Password` desse Secret. Não é necessário criar um arquivo privado adicional nem executar um comando separado para provisioná-lo.
+
+O Secret local já foi configurado e a autenticação TLS/SMTP foi aceita pelo provedor. Nenhum e-mail foi enviado na validação. O consumidor Notifications não foi iniciado nessa prova: ao iniciá-lo, ele poderá processar mensagens pendentes conforme a configuração do grupo.
+
+A imagem Notifications foi atualizada para `fgcprojetofiap/notifications-api:1.0.7`, já disponível no Docker Hub. A versão foi conferida na API do Hub e testada em rede temporária isolada: HTTP 200 em `/health` e consumidores de UserCreatedEvent e PaymentProcessedEvent conectados. Nenhum evento foi publicado nem e-mail enviado nessa prova; os recursos temporários foram removidos. Users `1.5` e Catalog `1.0.3` também estão publicados no Hub. Os códigos das APIs ficam nos respectivos repositórios e os manifests deste Infra selecionam as versões da entrega.
+
+Para executar em uma máquina nova, obtenha a versão atualizada do Infra, ative o Kubernetes no Docker Desktop e execute:
+
+```powershell
+kubectl config use-context docker-desktop
+kubectl apply -k ./k8s
+kubectl -n fcg-demo get pods,pvc
+```
+
+O Kustomize aplica os quatro microserviços, banco, broker, configurações e Secrets. O Catalog obtém automaticamente as chaves públicas do Users; o Secret SMTP é aplicado pelo mesmo comando. Aguarde os Deployments ficarem disponíveis antes dos testes funcionais.

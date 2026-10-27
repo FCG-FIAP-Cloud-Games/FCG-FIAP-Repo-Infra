@@ -30,7 +30,7 @@ spec:
     spec:
       containers:
         - name: notifications-api
-          image: fgcprojetofiap/notifications-api:1.0.2
+          image: fgcprojetofiap/notifications-api:1.0.7
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

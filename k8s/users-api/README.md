@@ -2,7 +2,7 @@
 
 A configuração segue o padrão do Payments publicado em `feature/payments`, atualizado no commit `7957d7d` e com as alterações da `main` até `1e93514`. Users e Payments usam o mesmo namespace, ConfigMap, Secret, servidor PostgreSQL, RabbitMQ e forma de aplicação dos manifestos.
 
-A imagem do Users continua `fgcprojetofiap/users-api:1.4`. Não é necessário compilar a aplicação, publicar outra imagem ou executar migrations manualmente.
+A imagem Users `fgcprojetofiap/users-api:1.5` acrescenta o endpoint JWKS e mantém a preparação automática. A correção exige também Catalog `fgcprojetofiap/catalog-api:1.0.3`. Ambas foram testadas e publicadas no Docker Hub em 27/10/2026. Migrations continuam automáticas.
 
 ## Executar
 
@@ -30,7 +30,7 @@ Mantenha o terminal do port-forward aberto. Acesse:
 
 No Postman, use `http://localhost:5089` como `baseUrl` na collection do Users, ou `usersUrl` na collection de integração. A porta 5089 evita ocupar a 5088 que pode estar sendo usada pelo Compose. Dentro do cluster, a API continua na porta 8080.
 
-O arquivo [kustomization.yaml](../kustomization.yaml) reúne os manifestos de **Users, Payments, PostgreSQL, RabbitMQ e configurações compartilhadas**. O recurso já vem integrado ao `kubectl`; não acrescenta instalação de ferramenta ou serviço preparador. Catalog e Notifications ficam fora desse conjunto enquanto seus manifestos deste branch não estiverem preparados. A criação dos Pods acontece em paralelo; o comando de rollout aguarda a prontidão do Users. Se a primeira tentativa da API ocorrer antes de o banco estar disponível, o Kubernetes tentará reiniciar o container.
+O arquivo [kustomization.yaml](../kustomization.yaml) reúne os manifestos de **Users, Payments, PostgreSQL, RabbitMQ e configurações compartilhadas**. O recurso já vem integrado ao `kubectl`; não acrescenta instalação de ferramenta ou serviço preparador. Catalog e Notifications também estão incluídos após a consolidação. O Catalog usa JWKS, e Notifications recebe o Secret SMTP versionado no Infra e incluído na entrada comum, conforme o README principal. A criação dos Pods acontece em paralelo; o comando de rollout aguarda a prontidão do Users. Se a primeira tentativa da API ocorrer antes de o banco estar disponível, o Kubernetes tentará reiniciar o container.
 
 Para conferir todos os serviços incluídos:
 
@@ -84,7 +84,7 @@ O manifesto Users mantém a mesma disposição de campos e variáveis do Payment
 
 O tipo de armazenamento precisa suportar as permissões do volume. O entrypoint original da imagem permanece ativo. Não há initContainer nem serviço preparador adicional.
 
-**Atualização do Pod.** A estratégia `Recreate` mantém uma única instância acessando o volume `ReadWriteOnce`, preservando chaves entre recriações. Uma atualização pode causar um breve intervalo sem API. A integração futura do Catalog deve distribuir somente a chave pública; a raiz desse volume contém a chave privada e não deve ser compartilhada com ele.
+**Atualização do Pod.** A estratégia `Recreate` mantém uma única instância acessando o volume `ReadWriteOnce`, preservando chaves entre recriações. Uma atualização pode causar um breve intervalo sem API. O Catalog obtém somente as chaves públicas pelo endpoint JWKS. Ele não monta esse PVC nem recebe a chave privada.
 
 ## Recursos compartilhados
 
@@ -140,3 +140,11 @@ Essa prova executou Users, PostgreSQL e RabbitMQ; o Payments foi validado na com
 - [Probes e inicialização](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 - [Permissões de volumes com fsGroup](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/).
 - [Requests e limits](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/).
+
+## Distribuição automática da chave pública
+
+`GET /.well-known/jwks.json` é anônimo e retorna somente `kty`, `use`, `alg`, `kid`, `n` e `e` de cada chave pública configurada. Os parâmetros privados nunca são serializados. O endpoint utiliza as mesmas chaves públicas que correspondem aos tokens assinados pelo Users.
+
+O [Catalog](../catalog-api/README.md) busca esse documento e mantém cache. A preparação do cluster não exige executar `kubectl exec` para obter PEM nem criar ConfigMap da chave pública. A persistência do par RSA no Users continua necessária entre reinícios.
+
+Na prova de 27/10/2026, Users 1.5 e Catalog 1.0.3 ficaram disponíveis no Kubernetes local. Foram aprovadas 15 verificações da integração JWKS, além de 40 testes HTTP/autorização do Users e 73 de autenticação/JWKS do Catalog. Nenhum e-mail foi enviado nessa prova. As imagens aprovadas foram publicadas no Docker Hub em 27/10/2026.

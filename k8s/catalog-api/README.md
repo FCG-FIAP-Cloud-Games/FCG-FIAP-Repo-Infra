@@ -1,48 +1,32 @@
-# JWT da CatalogAPI
+# JWT da CatalogAPI no Kubernetes
 
-O Deployment espera o ConfigMap `catalog-jwt-public-key` no namespace
-`fcg-demo`, com a chave `public.pem`. Somente esse arquivo e montado, para
-leitura, em `/data/jwt-publica/public.pem`.
+O Catalog usa `Jwt__JwksUri=http://usersapi:8080/.well-known/jwks.json` para obter automaticamente as chaves públicas do Users. A chave privada permanece somente no Users. Não é necessário copiar PEM, criar `catalog-jwt-public-key` ou compartilhar PVC entre as APIs.
 
-O arquivo `catalog-jwt-public-key.example.yml` e um exemplo incompleto, sem
-PEM. Nao o aplique e nao aplique este diretorio inteiro: isso poderia criar
-ou sobrescrever o ConfigMap real com dados vazios.
+## Imagens
 
-## Provisionamento anterior ao deploy
+- Users: `fgcprojetofiap/users-api:1.5`.
+- Catalog: `fgcprojetofiap/catalog-api:1.0.3`.
 
-1. Obtenha com o responsavel pela UsersAPI o PEM publico correspondente a
-   chave privada usada para assinar tokens com `kid=users-demo-v1`.
-   Guarde o arquivo fora do repositorio. Nao gere outro par RSA e nao use
-   uma chave privada neste procedimento.
-2. Garanta que o namespace `fcg-demo` exista. Provisione o ConfigMap a partir
-   do arquivo real, substituindo o caminho abaixo. Execute somente quando
-   o provisionamento no cluster estiver autorizado:
+As imagens foram testadas e publicadas no Docker Hub em 27/10/2026. Uma instalação nova pode baixá-las diretamente pelos manifests; não é necessário compilar as APIs.
 
-   ```powershell
-   kubectl create configmap catalog-jwt-public-key --namespace fcg-demo --from-file=public.pem="C:\caminho-fora-do-repositorio\public.pem" --dry-run=client -o yaml | kubectl apply -f -
-   ```
+## Inicialização e cache
 
-   O manifesto real e transmitido diretamente ao kubectl, sem ser salvo no Git.
+O Catalog inicia sua atualização de chaves em segundo plano, tentando novamente a cada 5 segundos quando o Users está indisponível. `/health` só fica saudável depois de obter chaves públicas válidas. A startup probe permite cerca de 300 segundos para a preparação.
 
-3. Antes do deploy da CatalogAPI, tambem devem existir `fcg-config` e
-   `fcg-secrets` no mesmo namespace, alem das dependencias PostgreSQL e RabbitMQ
-   ja referenciadas pelo Deployment.
+O cache é atualizado normalmente a cada 60 segundos e vale por até 900 segundos. Um identificador desconhecido solicita nova atualização, limitada a uma tentativa a cada 5 segundos. As requisições são validadas localmente; não há consulta de rede por operação com uma chave conhecida. Uma falha temporária de rede conserva apenas o cache ainda válido. Sem chave válida, a autenticação é recusada.
 
-## Comportamento e verificacao
+O endereço é configurado no ambiente, nunca obtido do token. Redirecionamentos HTTP são desabilitados. HTTP é permitido em Development; fora desse ambiente, a URL precisa usar HTTPS. Assinatura RS256, `kid`, emissor, audiência, expiração e identidade continuam sendo validados. Emissor e audiência vêm do `fcg-config`.
 
-- `Jwt__PublicKeys__0__Kid` usa `users-demo-v1`.
-- `Jwt__PublicKeys__0__PublicKeyPath` aponta para o arquivo montado.
-- Nao configure `Jwt__PublicKeys__0__PublicKeyPem` simultaneamente: a API
-  exige exatamente uma origem por chave.
-- O codigo de autenticacao le e importa o PEM na inicializacao. ConfigMap
-  ou chave `public.pem` ausente impede a montagem; PEM invalido impede a
-  inicializacao. O exemplo vazio nao satisfaz essa dependencia.
-- Emissor e audiencia continuam vindo de `fcg-config` e precisam coincidir
-  com os tokens da UsersAPI.
-- Ao substituir a chave, reinicie os Pods da CatalogAPI para recarrega-la.
-- A verificacao funcional exige um token emitido pela UsersAPI e uma rota
-  protegida da CatalogAPI. O endpoint `/health` nao valida esse fluxo.
+`/health/live` verifica vida sem exigir cache válido; readiness/startup usam `/health`.
 
-Nenhuma chave privada deve ser disponibilizada a CatalogAPI. O fornecimento
-do PEM correto e a disponibilidade da UsersAPI sao dependencias externas a
-esta configuracao.
+## Compatibilidade com o modo PEM
+
+O código conserva o modo anterior `Jwt:PublicKeys`, usado por configurações que fornecem PEM ou arquivo local. As duas origens não devem ser configuradas simultaneamente. `catalog-jwt-public-key.example.yml` é somente um exemplo legado incompleto e fica fora do Kustomize; não o aplique sobre um ConfigMap real.
+
+## Validação desta alteração
+
+- 73 testes de autenticação/JWKS do Catalog aprovados, incluindo atualização, expiração do cache, indisponibilidade e rejeição de conjuntos inválidos.
+- 40 testes de autorização/JWKS do Users aprovados.
+- 15 verificações no cluster Docker Desktop aprovadas: endpoint público, login Users, criação de jogo protegida no Catalog, rejeição de token ausente/adulterado, leitura do jogo e ausência de volume de chave no Catalog.
+
+Nenhum e-mail foi enviado nessa prova. Um jogo fictício foi criado no banco Catalog para comprovar a operação autenticada.

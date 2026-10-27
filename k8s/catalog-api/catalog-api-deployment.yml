@@ -15,15 +15,13 @@ spec:
     spec:
       containers:
       - name: catalogapi
-        image: fgcprojetofiap/catalog-api:1.0.2
+        image: fgcprojetofiap/catalog-api:1.0.3
         ports:
         - containerPort: 8080
           name: http
         env:
-        - name: Jwt__PublicKeys__0__Kid
-          value: "users-demo-v1"
-        - name: Jwt__PublicKeys__0__PublicKeyPath
-          value: "/data/jwt-publica/public.pem"
+        - name: Jwt__JwksUri
+          value: "http://usersapi:8080/.well-known/jwks.json"
         - name: ConnectionStrings__CatalogDatabase
           value: "Host=postgres;Port=5432;Database=$(CATALOG_DB_NAME);Username=$(CATALOG_DB_USER);Password=$(CATALOG_DB_PASSWORD)"
         - name: RabbitMq__Username
@@ -41,10 +39,13 @@ spec:
             name: fcg-config
         - secretRef:
             name: fcg-secrets
-        volumeMounts:
-        - name: jwt-public-key
-          mountPath: /data/jwt-publica
-          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 60
         readinessProbe:
           httpGet:
             path: /health
@@ -53,18 +54,11 @@ spec:
           periodSeconds: 10
         livenessProbe:
           httpGet:
-            path: /health
+            path: /health/live
             port: 8080
           initialDelaySeconds: 20
           periodSeconds: 10
       restartPolicy: Always
-      volumes:
-      - name: jwt-public-key
-        configMap:
-          name: catalog-jwt-public-key
-          items:
-          - key: public.pem
-            path: public.pem
 ---
 apiVersion: v1
 kind: Service

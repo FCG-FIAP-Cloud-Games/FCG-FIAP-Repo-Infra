@@ -4,8 +4,11 @@ resources:
   - namespace/namespace.yml
   - key-vault/configmap.yml
   - key-vault/secrets.yml
+  - key-vault/notifications-api-secrets.yml
   - key-vault/postgres-init-script.yml
   - postgres/postgres-deployment.yml
   - rabbitmq/rabbitmq-deployment.yml
   - payments-api/payments-api-deployment.yml
   - users-api/users-api-deployment.yml
+  - catalog-api/catalog-api-deployment.yml
+  - notifications-api/notifications-api-deployment.yml

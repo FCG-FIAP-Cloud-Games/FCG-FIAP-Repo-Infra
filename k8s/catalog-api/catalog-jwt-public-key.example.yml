@@ -1,0 +1,10 @@
+# EXEMPLO INCOMPLETO: nao aplicar este arquivo.
+# O ConfigMap real precisa conter data["public.pem"] com a chave publica
+# correspondente a chave de assinatura da UsersAPI (kid: users-demo-v1).
+# Nenhum PEM foi incluido. Provisione o recurso conforme README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-jwt-public-key
+  namespace: fcg-demo
+data: {}

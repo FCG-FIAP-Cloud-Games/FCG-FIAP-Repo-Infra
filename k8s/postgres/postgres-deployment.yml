@@ -18,6 +18,8 @@ metadata:
   namespace: fcg-demo
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres
@@ -110,12 +112,12 @@ spec:
           mountPath: /docker-entrypoint-initdb.d
         readinessProbe:
           exec:
-            command: ["pg_isready", "-U", "postgres"]
+            command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres"]
           initialDelaySeconds: 10
           periodSeconds: 5
         livenessProbe:
           exec:
-            command: ["pg_isready", "-U", "postgres"]
+            command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "postgres"]
           initialDelaySeconds: 15
           periodSeconds: 10
       volumes:

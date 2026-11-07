@@ -98,7 +98,7 @@ FCG-FIAP-Repo-Infra/
 │   ├── key-vault/
 │   │   ├── configmap.yml
 │   │   ├── secrets.yml
-│   │   ├── notifications-api-secrets.yml
+│   │   ├── set-notifications-secret.ps1
 │   │   └── postgres-init-script.yml
 │   │
 │   ├── postgres/
@@ -283,11 +283,70 @@ Esse arquivo reúne os recursos necessários para executar toda a infraestrutura
 
 ## 1. Aplicar os manifests
 
-Na raiz do repositório:
+Os dois Secrets, `fcg-secrets` e `notifications-api-secrets`, são definidos
+separadamente em `k8s/key-vault/secrets.yml`, já incluído no Kustomize.
+O Secret da NotificationsAPI define `Smtp__User` como `fcgproject.dev@gmail.com`
+e reserva `data.Smtp__Password` com o marcador `__SMTP_PASSWORD_REQUIRED__`.
+Esse marcador é intencionalmente inválido em base64: a API Kubernetes rejeita
+o Secret se ele não for substituído. Não é uma senha de exemplo.
 
-```bash
-kubectl apply -k ./k8s/
+O Kubernetes e o Kustomize não substituem `${SMTP_PASSWORD}` automaticamente.
+Por isso, `set-notifications-secret.ps1` continua necessário: executa
+`kubectl kustomize`, solicita a senha com entrada oculta, codifica-a em base64
+(UTF-8) e substitui o marcador somente em memória. O resultado é enviado pela
+entrada padrão do `kubectl`, sem salvar a senha em arquivos ou argumentos.
+Base64 é apenas codificação, não criptografia. Não grave nem publique a saída
+renderizada com a senha. Nenhuma alteração no `.gitignore` é necessária.
+
+Para o deploy completo, na raiz do repositório, em PowerShell:
+
+```powershell
+kubectl config current-context
+./k8s/key-vault/set-notifications-secret.ps1 -AllResources
 ```
+
+Não execute `kubectl apply -k ./k8s/` ou aplique `secrets.yml` diretamente:
+isso enviaria o marcador inválido e poderia aplicar outros recursos antes da
+falha. Use o script em todos os deploys completos, fornecendo a senha SMTP válida
+do ambiente; nunca substitua o marcador no arquivo versionado.
+
+Para corrigir apenas o Secret em um ambiente já implantado (namespace `fcg-demo`
+existente), execute sem `-AllResources`; os demais recursos não serão aplicados:
+
+```powershell
+./k8s/key-vault/set-notifications-secret.ps1
+```
+
+O kubelet tenta iniciar o contêiner novamente quando o Secret fica disponível.
+Ao trocar a senha de um contêiner já em execução, reinicie somente esse Deployment:
+
+```powershell
+kubectl rollout restart deployment/notifications-api -n fcg-demo
+```
+
+Para validar a montagem sem exibir os Secrets ou modificar o cluster:
+
+```powershell
+kubectl kustomize ./k8s/ | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Falha no Kustomize' }
+./k8s/key-vault/set-notifications-secret.ps1 -AllResources -DryRun
+```
+
+`-DryRun` solicita a senha e usa a validação local do cliente; não comprova
+permissões, políticas do servidor nem autenticação SMTP.
+
+Valide a implantação sem exibir valores do Secret:
+
+```powershell
+kubectl get secret notifications-api-secrets -n fcg-demo
+kubectl rollout status deployment/notifications-api -n fcg-demo --timeout=180s
+kubectl get pods -n fcg-demo -l app=notifications-api
+```
+
+O resultado esperado é `1/1 Running`, com o rollout concluído. Se falhar, consulte
+`kubectl describe pod -n fcg-demo -l app=notifications-api` para verificar os eventos.
+O estado Running/Ready não comprova a autenticação SMTP; valide o envio de e-mail
+separadamente com as credenciais do ambiente.
 
 O Kustomize aplica os recursos definidos na configuração central, incluindo:
 
@@ -364,8 +423,8 @@ O mesmo procedimento pode ser utilizado para os outros microsserviços, utilizan
 
 Depois de atualizar as imagens ou manifests:
 
-```bash
-kubectl apply -k ./k8s/
+```powershell
+./k8s/key-vault/set-notifications-secret.ps1 -AllResources
 ```
 
 Para acompanhar a atualização dos Deployments:

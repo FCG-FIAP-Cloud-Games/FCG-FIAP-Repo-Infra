@@ -73,6 +73,28 @@ services:
     networks:
       - fcg-interna
 
+  # Cria os bindings exchange -> exchange que levam os eventos de Users e Payments
+  # até os exchanges consumidos pelo Notifications. Sem eles a fila fica vazia e
+  # nenhum e-mail é enviado.
+  rabbitmq-bindings:
+    image: curlimages/curl:8.10.1
+    entrypoint: ["/bin/sh", "/scripts/create-bindings.sh"]
+    environment:
+      RABBIT_API: http://rabbitmq:15672/api
+      RABBIT_USER: ${RABBITMQ_USER}
+      RABBIT_PASS: ${RABBITMQ_PASSWORD}
+      # Confirme os nomes reais em Exchanges no RabbitMQ Management.
+      USERS_USER_CREATED_EXCHANGE: ${USERS_USER_CREATED_EXCHANGE:-FCG.Notifications.Application.Messaging.Contracts:UserCreatedEvent}
+      PAYMENTS_PAYMENT_PROCESSED_EXCHANGE: ${PAYMENTS_PAYMENT_PROCESSED_EXCHANGE:-PaymentProcessedEvent}
+    volumes:
+      - ./rabbitmq/create-bindings.sh:/scripts/create-bindings.sh:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - fcg-interna
+
   usersapi:
     image: ${USERS_IMAGE}
     environment:
@@ -164,13 +186,21 @@ services:
         max-file: "3"
 
   notificationsapi:
-    image: ${NOTIFICATIONS_IMAGE:-fgcprojetofiap/notifications-api:1.0.2}
+    image: ${NOTIFICATIONS_IMAGE:-fgcprojetofiap/notifications-api:1.0.8}
     restart: unless-stopped
     environment:
       <<: *rabbit-config
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__NotificationsDatabase: "Host=postgres;Port=5432;Database=${NOTIFICATIONS_DB_NAME};Username=${NOTIFICATIONS_DB_USER};Password=${NOTIFICATIONS_DB_PASSWORD};Include Error Detail=false"
+      # Cria as tabelas (inclui a projeção de e-mails). Sem isso nenhum e-mail sai.
+      Database__ApplyMigrationsOnStartup: "true"
+      Swagger__Enabled: "true"
+      Messaging__EnableTestEndpoints: "true"
+      # Modo persistente (Inbox + idempotência). Para o C37 use
+      # NOTIFICATIONS_DISPATCHER_ENABLED=true no .env.
+      NotificationsDispatcher__Enabled: "${NOTIFICATIONS_DISPATCHER_ENABLED:-false}"
+      Smtp__Id: ${SMTP_DESTINATION_ID:-smtp-gmail}
       Smtp__Host: ${SMTP_HOST:-smtp.gmail.com}
       Smtp__Port: ${SMTP_PORT:-587}
       Smtp__User: ${SMTP_USER:?Defina SMTP_USER no .env do Docker Compose}
@@ -185,6 +215,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      rabbitmq-bindings:
+        condition: service_completed_successfully
     networks:
       - fcg-interna
     logging:

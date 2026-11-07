@@ -1,0 +1,75 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-bindings
+  namespace: fcg-demo
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-bindings
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bindings
+          image: curlimages/curl:8.10.1
+          env:
+            - name: RABBIT_API
+              value: "http://rabbitmq:15672/api"
+            - name: RABBIT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_USER
+            - name: RABBIT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: fcg-secrets
+                  key: RABBITMQ_PASSWORD
+            # Confirme os nomes reais em Exchanges no RabbitMQ Management do cluster.
+            - name: USERS_USER_CREATED_EXCHANGE
+              value: "FCG.Notifications.Application.Messaging.Contracts:UserCreatedEvent"
+            - name: PAYMENTS_PAYMENT_PROCESSED_EXCHANGE
+              value: "PaymentProcessedEvent"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              auth="${RABBIT_USER}:${RABBIT_PASS}"
+              api="${RABBIT_API}"
+              vh="%2F"
+              enc() { printf '%s' "$1" | sed 's/:/%3A/g'; }
+              declare_exchange() {
+                e=`enc "$1"`
+                curl -fsS -u "$auth" -H 'content-type: application/json' -X PUT \
+                  "$api/exchanges/$vh/$e" \
+                  -d '{"type":"fanout","durable":true,"auto_delete":false}' >/dev/null
+              }
+              bind() {
+                src="$1"; dst="$2"
+                if [ "$src" = "$dst" ]; then
+                  echo "origem e destino iguais ($src), nada a fazer"
+                  return 0
+                fi
+                declare_exchange "$src"
+                declare_exchange "$dst"
+                s=`enc "$src"`; d=`enc "$dst"`
+                curl -fsS -u "$auth" -H 'content-type: application/json' -X POST \
+                  "$api/bindings/$vh/e/$s/e/$d" -d '{}' >/dev/null
+                echo "bind: $src -> $dst"
+              }
+              until curl -fsS -u "$auth" "$api/overview" >/dev/null 2>&1; do
+                echo "aguardando a API de gerenciamento do RabbitMQ..."
+                sleep 3
+              done
+              bind "$USERS_USER_CREATED_EXCHANGE" "UserCreatedEvent"
+              bind "$PAYMENTS_PAYMENT_PROCESSED_EXCHANGE" "PaymentProcessedEvent"
+              echo "bindings ok"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

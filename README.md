@@ -11,7 +11,7 @@ As imagens estão publicadas no Docker Hub. As versões usadas pelo Compose fica
 | Users | `fgcprojetofiap/users-api:1.4` |
 | Catalog | `fgcprojetofiap/catalog-api:1.0.2` |
 | Payments | `fgcprojetofiap/payments-api:1.2` |
-| Notifications | `fgcprojetofiap/notifications-api:1.0.3` |
+| Notifications | `fgcprojetofiap/notifications-api:1.0.8` |
 
 ## Executar
 

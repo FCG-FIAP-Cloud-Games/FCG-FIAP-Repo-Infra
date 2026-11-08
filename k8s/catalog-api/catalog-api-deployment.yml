@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: catalogapi
-        image: fgcprojetofiap/catalog-api:1.0.3
+        image: fgcprojetofiap/catalog-api:1.0.4
         ports:
         - containerPort: 8080
           name: http

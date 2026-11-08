@@ -264,186 +264,205 @@ O Docker irá baixar as novas versões e recriar os containers quando necessári
 
 # ☸️ Execução com Kubernetes
 
-O repositório também disponibiliza manifests Kubernetes organizados com Kustomize.
+A infraestrutura Kubernetes permite executar todas as APIs do projeto em conjunto, utilizando PostgreSQL e RabbitMQ compartilhados.
 
-A implantação é centralizada no arquivo:
+Toda a configuração está centralizada na pasta `k8s/`, utilizando Kustomize para facilitar a inicialização e gerenciamento dos recursos.
 
-```text
-k8s/kustomization.yaml
+### Pré-requisitos
+
+- Docker Desktop com Kubernetes habilitado ou outro cluster Kubernetes disponível.
+- `kubectl` instalado e configurado.
+- Acesso ao cluster Kubernetes.
+
+Verifique se o cluster está funcionando:
+
+```bash
+kubectl cluster-info
+kubectl get nodes
 ```
 
-Esse arquivo reúne os recursos necessários para executar toda a infraestrutura.
+### 1. Iniciar toda a infraestrutura
 
-## Pré-requisitos
+Na raiz do repositório, execute:
 
-- Kubernetes disponível.
-- kubectl instalado.
-- Kustomize compatível com a versão do kubectl.
-- Cluster com suporte a PersistentVolumeClaim.
-
-## 1. Aplicar os manifests
-
-Os dois Secrets, `fcg-secrets` e `notifications-api-secrets`, são definidos
-separadamente em `k8s/key-vault/secrets.yml`, já incluído no Kustomize.
-O Secret da NotificationsAPI define `Smtp__User` como `fcgproject.dev@gmail.com`
-e reserva `data.Smtp__Password` com o marcador `__SMTP_PASSWORD_REQUIRED__`.
-Esse marcador é intencionalmente inválido em base64: a API Kubernetes rejeita
-o Secret se ele não for substituído. Não é uma senha de exemplo.
-
-O Kubernetes e o Kustomize não substituem `${SMTP_PASSWORD}` automaticamente.
-Por isso, `set-notifications-secret.ps1` continua necessário: executa
-`kubectl kustomize`, solicita a senha com entrada oculta, codifica-a em base64
-(UTF-8) e substitui o marcador somente em memória. O resultado é enviado pela
-entrada padrão do `kubectl`, sem salvar a senha em arquivos ou argumentos.
-Base64 é apenas codificação, não criptografia. Não grave nem publique a saída
-renderizada com a senha. Nenhuma alteração no `.gitignore` é necessária.
-
-Para o deploy completo, na raiz do repositório, em PowerShell:
-
-```powershell
-kubectl config current-context
-./k8s/key-vault/set-notifications-secret.ps1 -AllResources
+```bash
+kubectl apply -k ./k8s
 ```
 
-Não execute `kubectl apply -k ./k8s/` ou aplique `secrets.yml` diretamente:
-isso enviaria o marcador inválido e poderia aplicar outros recursos antes da
-falha. Use o script em todos os deploys completos, fornecendo a senha SMTP válida
-do ambiente; nunca substitua o marcador no arquivo versionado.
+Esse comando aplica todos os recursos definidos no `kustomization.yaml`, incluindo:
 
-Para corrigir apenas o Secret em um ambiente já implantado (namespace `fcg-demo`
-existente), execute sem `-AllResources`; os demais recursos não serão aplicados:
+- PostgreSQL;
+- RabbitMQ;
+- Users API;
+- Catalog API;
+- Payments API;
+- Notifications API;
+- ConfigMaps, Secrets e demais configurações necessárias.
 
-```powershell
-./k8s/key-vault/set-notifications-secret.ps1
+Não é necessário executar os manifests individualmente.
+
+### 2. Verificar a inicialização
+
+Consultar todos os recursos do projeto:
+
+```bash
+kubectl get all -n fcg-demo
 ```
 
-O kubelet tenta iniciar o contêiner novamente quando o Secret fica disponível.
-Ao trocar a senha de um contêiner já em execução, reinicie somente esse Deployment:
-
-```powershell
-kubectl rollout restart deployment/notifications-api -n fcg-demo
-```
-
-Para validar a montagem sem exibir os Secrets ou modificar o cluster:
-
-```powershell
-kubectl kustomize ./k8s/ | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Falha no Kustomize' }
-./k8s/key-vault/set-notifications-secret.ps1 -AllResources -DryRun
-```
-
-`-DryRun` solicita a senha e usa a validação local do cliente; não comprova
-permissões, políticas do servidor nem autenticação SMTP.
-
-Valide a implantação sem exibir valores do Secret:
-
-```powershell
-kubectl get secret notifications-api-secrets -n fcg-demo
-kubectl rollout status deployment/notifications-api -n fcg-demo --timeout=180s
-kubectl get pods -n fcg-demo -l app=notifications-api
-```
-
-O resultado esperado é `1/1 Running`, com o rollout concluído. Se falhar, consulte
-`kubectl describe pod -n fcg-demo -l app=notifications-api` para verificar os eventos.
-O estado Running/Ready não comprova a autenticação SMTP; valide o envio de e-mail
-separadamente com as credenciais do ambiente.
-
-O Kustomize aplica os recursos definidos na configuração central, incluindo:
-
-- Namespace.
-- ConfigMap.
-- Secrets.
-- PostgreSQL.
-- RabbitMQ.
-- RabbitMQ Bindings.
-- UsersAPI.
-- CatalogAPI.
-- PaymentsAPI.
-- NotificationsAPI.
-
-## 2. Verificar os recursos
-
-Verificar os pods:
+Consultar os Pods:
 
 ```bash
 kubectl get pods -n fcg-demo
 ```
 
-Verificar os Deployments:
+Acompanhar a inicialização em tempo real:
+
+```bash
+kubectl get pods -n fcg-demo -w
+```
+
+Consultar os Deployments:
 
 ```bash
 kubectl get deployments -n fcg-demo
 ```
 
-Verificar os Services:
+Consultar os Services:
 
 ```bash
 kubectl get services -n fcg-demo
 ```
 
-Verificar os PersistentVolumeClaims:
+Consultar também os volumes persistentes:
 
 ```bash
 kubectl get pvc -n fcg-demo
 ```
 
-## 3. Consultar logs
+Aguarde até que os Pods estejam com status `Running` e os containers estejam `Ready`.
 
-Exemplo para o PaymentsAPI:
+### 3. Acessar as APIs e o RabbitMQ
+
+Para acessar os serviços localmente, utilize `kubectl port-forward`.
+
+Abra um terminal separado para cada comando e mantenha os processos em execução.
+
+**Users API**
 
 ```bash
-kubectl logs deployment/paymentsapi -n fcg-demo
+kubectl port-forward svc/usersapi 5088:8080 -n fcg-demo
 ```
 
-Acompanhar em tempo real:
+Swagger: http://localhost:5088/swagger
+
+**Catalog API**
 
 ```bash
+kubectl port-forward svc/catalogapi 5081:8080 -n fcg-demo
+```
+
+Swagger: http://localhost:5081/swagger
+
+**Payments API**
+
+```bash
+kubectl port-forward svc/paymentsapi 5082:8080 -n fcg-demo
+```
+
+Swagger: http://localhost:5082/swagger
+
+**Notifications API**
+
+```bash
+kubectl port-forward svc/notifications-api 5083:80 -n fcg-demo
+```
+
+Swagger: http://localhost:5083/swagger
+
+**RabbitMQ Management**
+
+```bash
+kubectl port-forward svc/rabbitmq 15672:15672 -n fcg-demo
+```
+
+Painel: http://localhost:15672
+
+Utilize as credenciais definidas no arquivo de Secrets do ambiente local.
+
+### 4. Consultar logs
+
+Para acompanhar os logs de uma API:
+
+```bash
+kubectl logs -f deployment/usersapi -n fcg-demo
+kubectl logs -f deployment/catalogapi -n fcg-demo
 kubectl logs -f deployment/paymentsapi -n fcg-demo
+kubectl logs -f deployment/notifications-api -n fcg-demo
 ```
 
-## 4. Acessar o Swagger do PaymentsAPI
-
-O Service do PaymentsAPI utiliza o tipo `ClusterIP`, portanto não fica diretamente exposto na máquina local.
-
-Para acessar o Swagger através de port-forward:
+Logs do RabbitMQ:
 
 ```bash
-kubectl port-forward service/paymentsapi 5082:8080 -n fcg-demo
+kubectl logs -f deployment/rabbitmq -n fcg-demo
 ```
 
-Depois, acesse:
-
-```text
-http://localhost:5082/swagger
-```
-
-O mesmo procedimento pode ser utilizado para os outros microsserviços, utilizando seus respectivos Services e portas.
-
-## 5. Atualizar a implantação
-
-Depois de atualizar as imagens ou manifests:
-
-```powershell
-./k8s/key-vault/set-notifications-secret.ps1 -AllResources
-```
-
-Para acompanhar a atualização dos Deployments:
+Consultar os eventos do namespace:
 
 ```bash
-kubectl rollout status deployment/paymentsapi -n fcg-demo
+kubectl get events -n fcg-demo --sort-by=.lastTimestamp
 ```
 
-## 6. Remover a infraestrutura
+### 5. Reiniciar os serviços
 
-Para remover os recursos gerenciados pelo Kustomize:
+Para reiniciar todos os Deployments:
 
 ```bash
-kubectl delete -k ./k8s/
+kubectl rollout restart deployment -n fcg-demo
 ```
 
-A remoção de recursos persistentes deve ser tratada com cuidado, especialmente quando houver dados importantes nos volumes.
+Acompanhar a atualização:
 
----
+```bash
+kubectl get pods -n fcg-demo -w
+```
+
+Para reiniciar apenas uma API:
+
+```bash
+kubectl rollout restart deployment/usersapi -n fcg-demo
+```
+
+### 6. Atualizar a infraestrutura
+
+Após atualizar as imagens ou configurações dos manifests, execute novamente:
+
+```bash
+kubectl apply -k ./k8s
+```
+
+O Kubernetes aplicará as alterações necessárias.
+
+### 7. Parar a infraestrutura
+
+Para interromper todos os serviços sem remover os dados persistidos:
+
+```bash
+kubectl scale deployment --all --replicas=0 -n fcg-demo
+```
+
+Para iniciar novamente:
+
+```bash
+kubectl scale deployment --all --replicas=1 -n fcg-demo
+```
+
+**Atenção:** para remover completamente os recursos, incluindo os volumes persistentes, utilize:
+
+```bash
+kubectl delete -k ./k8s
+```
+
+Esse último comando pode excluir os dados do PostgreSQL e as chaves persistidas dos usuários, dependendo da política de retenção do cluster. Utilize somente quando desejar remover completamente o ambiente.
 
 # 🗄️ Persistência e isolamento dos bancos
 
